@@ -27,7 +27,7 @@ def conectar_realista(n1, n2):
         mapa.conectar(n1, n2, dist)
 
 mi_auto = Auto(None, BLANCO)
-
+mi_auto.historial = [] 
 # --- CREACIÓN INICIAL DEL MAPA ---
 mapa.agregar_nodo("N1", (200, 100))   # Arriba-Izq
 mapa.agregar_nodo("N2", (640, 100))   # Arriba-Centro
@@ -183,13 +183,13 @@ try:
 
             if evento.type == pygame.KEYDOWN:
                 # --- CAMBIO DE MODO ---
-                if evento.key == pygame.K_e:
+                if evento.key == pygame.K_s:
                     with state_lock:
                         modo_editor = False
                         nodo_seleccionado_para_conectar = None
                     print("--- SIMULACIÓN ACTIVADA ---")
 
-                elif evento.key == pygame.K_s:
+                elif evento.key == pygame.K_e:
                     with state_lock:
                         modo_editor = True
                         nodo_seleccionado_para_conectar = None
@@ -254,6 +254,7 @@ try:
                                     if camino:
                                         mi_auto.ruta = camino
                                         seleccion_origen = nodo_bajo_mouse
+                                        
                                 else:
                                     if seleccion_origen is None:
                                         seleccion_origen = nodo_bajo_mouse
@@ -321,11 +322,11 @@ try:
 
         # UI
         fuente = pygame.font.SysFont("Arial", 24)
-        txt = "MODO: EDITOR (Usa 'E')" if modo_editor else "MODO: SIMULACIÓN (Usa 'S')"
+        txt = "MODO: EDITOR (Usa 'S' para cambiar a la simulacion)" if modo_editor else "MODO: SIMULACIÓN (Usa 'E') Para cambiar al editor"
         col = AMARILLO if modo_editor else BLANCO
         pantalla.blit(fuente.render(txt, True, col), (10, 10))
         
-        txt_f = "F: Toggle Semáforo | I: Insertar Semáforo (sobre nodo)"
+        txt_f = "F: Agregar/Quitar Semáforos"
         pantalla.blit(fuente.render(txt_f, True, BLANCO), (10, 40))
 
         pygame.display.flip()
