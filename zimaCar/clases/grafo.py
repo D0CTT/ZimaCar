@@ -1,12 +1,12 @@
 import pygame
-import heapq # <--- NUEVO: Necesario para el algoritmo
+import heapq
 from configuracion import *
 
 class Grafo:
     def __init__(self):
-        self.nodos = {} 
-        self.aristas = {} 
-        self.camino_resaltado = [] # <--- NUEVO: Para guardar la ruta encontrada
+        self.nodos = {}  # "A": (x, y)
+        self.aristas = {} # "A": {"B": costo}
+        self.camino_resaltado = [] 
 
     def agregar_nodo(self, nombre, pos):
         self.nodos[nombre] = pos
@@ -16,18 +16,27 @@ class Grafo:
         self.aristas[nodo_a][nodo_b] = costo
         self.aristas[nodo_b][nodo_a] = costo
 
-    # --- NUEVO: ALGORITMO DIJKSTRA ---
+    def eliminar_nodo(self, nombre_nodo):
+        if nombre_nodo in self.nodos:
+            del self.nodos[nombre_nodo]
+        if nombre_nodo in self.aristas:
+            del self.aristas[nombre_nodo]
+        for otro_nodo, sus_vecinos in self.aristas.items():
+            if nombre_nodo in sus_vecinos:
+                del sus_vecinos[nombre_nodo]
+        self.camino_resaltado = []
+
     def dijkstra(self, inicio, fin):
         cola_prioridad = [(0, inicio)]
         distancias = {nodo: float('inf') for nodo in self.nodos}
         distancias[inicio] = 0
-        padres = {nodo: None for nodo in self.nodos} # Para reconstruir el camino
+        padres = {nodo: None for nodo in self.nodos}
 
         while cola_prioridad:
             distancia_actual, nodo_actual = heapq.heappop(cola_prioridad)
 
             if nodo_actual == fin:
-                break # Llegamos al destino
+                break 
 
             if distancia_actual > distancias[nodo_actual]:
                 continue
@@ -39,59 +48,54 @@ class Grafo:
                     padres[vecino] = nodo_actual
                     heapq.heappush(cola_prioridad, (nueva_distancia, vecino))
         
-        # Reconstruir el camino (Backtracking)
         camino = []
         actual = fin
         while actual is not None:
-            camino.insert(0, actual) # Insertar al inicio
+            camino.insert(0, actual)
             actual = padres[actual]
         
-        # Si el camino solo tiene 1 nodo y no es el inicio, es que no hay ruta
         if len(camino) == 1 and camino[0] != inicio:
             return []
             
-        self.camino_resaltado = camino # Guardamos para dibujar
+        self.camino_resaltado = camino
         return camino
 
     def dibujar(self, pantalla):
-        # 1. Dibujar caminos normales (Gris)
+        # 1. Dibujar CALLES (Base ancha para dos carriles)
+        ANCHO_CALLE = ANCHO_C  # Espacio para dos autos
         for nodo_a, vecinos in self.aristas.items():
             for nodo_b in vecinos:
-                pygame.draw.line(pantalla, GRIS, self.nodos[nodo_a], self.nodos[nodo_b], 4)
+                if nodo_a in self.nodos and nodo_b in self.nodos:
+                    # Dibujar pavimento
+                    pygame.draw.line(pantalla, (80, 80, 80), self.nodos[nodo_a], self.nodos[nodo_b], ANCHO_CALLE)
+                    # Dibujar linea divisoria (Amarilla fina)
+                    pygame.draw.line(pantalla, (255, 200, 0), self.nodos[nodo_a], self.nodos[nodo_b], 2)
 
-        # 2. NUEVO: Dibujar camino resaltado (Verde)
+        # 2. Dibujar camino resaltado (Ruta del GPS)
         if len(self.camino_resaltado) > 1:
             for i in range(len(self.camino_resaltado) - 1):
-                nodo_a = self.camino_resaltado[i]
-                nodo_b = self.camino_resaltado[i+1]
-                pygame.draw.line(pantalla, VERDE, self.nodos[nodo_a], self.nodos[nodo_b], 6)
+                na = self.camino_resaltado[i]
+                nb = self.camino_resaltado[i+1]
+                if na in self.nodos and nb in self.nodos:
+                    pass 
 
-        # 3. Dibujar nodos
+        # 3. Dibujar NODOS COMO CUADRADOS
+        lado = RADIO_NODO * 2 # El tamaño total es el diámetro
+
         for nombre, pos in self.nodos.items():
-            color = AZUL
-            # Si el nodo es parte del camino, pintarlo verde
-            if nombre in self.camino_resaltado:
-                color = VERDE
-            pygame.draw.circle(pantalla, color, pos, RADIO_NODO)
+            color = VERDE if nombre in self.camino_resaltado else AZUL
             
-            # (Opcional) Dibujar nombre del nodo
-            fuente = pygame.font.SysFont("Arial", 16)
+            # Crear el rectángulo centrado: (x - radio, y - radio, ancho, alto)
+            rect_nodo = pygame.Rect(pos[0] - RADIO_NODO, pos[1] - RADIO_NODO, lado, lado)
+            
+            # Dibujar el cuadrado relleno
+            pygame.draw.rect(pantalla, color, rect_nodo)
+            
+            # Dibujar un borde blanco (opcional, por estética)
+            pygame.draw.rect(pantalla, BLANCO, rect_nodo, 2)
+            
+            # Texto centrado
+            fuente = pygame.font.SysFont("Arial", 12)
             texto = fuente.render(nombre, True, BLANCO)
-            pantalla.blit(texto, (pos[0]-5, pos[1]-10))
-    
-    def eliminar_nodo(self, nombre_nodo):
-        # 1. Eliminar el nodo de la lista de coordenadas
-        if nombre_nodo in self.nodos:
-            del self.nodos[nombre_nodo]
-        
-        # 2. Eliminar sus conexiones salientes
-        if nombre_nodo in self.aristas:
-            del self.aristas[nombre_nodo]
-            
-        # 3. Eliminar sus conexiones entrantes (desde otros vecinos)
-        for otro_nodo, sus_vecinos in self.aristas.items():
-            if nombre_nodo in sus_vecinos:
-                del sus_vecinos[nombre_nodo]
-        
-        # 4. Limpiar si era parte del camino resaltado
-        self.camino_resaltado = []
+            rect_texto = texto.get_rect(center=pos) # Centrar texto matemáticamente en el nodo
+            pantalla.blit(texto, rect_texto)
