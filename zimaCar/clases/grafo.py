@@ -89,13 +89,13 @@ class Grafo:
             rect_nodo = pygame.Rect(pos[0] - RADIO_NODO, pos[1] - RADIO_NODO, lado, lado)
             
             # Dibujar el cuadrado relleno
-            pygame.draw.rect(pantalla, color, rect_nodo)
+            pygame.draw.rect(pantalla, (80, 80, 80), rect_nodo)
             
             # Dibujar un borde blanco (opcional, por estética)
-            pygame.draw.rect(pantalla, BLANCO, rect_nodo, 2)
+            pygame.draw.rect(pantalla, (255, 200, 0), rect_nodo, 2)
             
             # Texto centrado
             fuente = pygame.font.SysFont("Arial", 12)
-            texto = fuente.render(nombre, True, BLANCO)
+            texto = fuente.render(nombre, True, (255, 200, 0))
             rect_texto = texto.get_rect(center=pos) # Centrar texto matemáticamente en el nodo
             pantalla.blit(texto, rect_texto)

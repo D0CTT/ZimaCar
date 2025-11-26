@@ -12,8 +12,55 @@ from clases.obstaculo import Obstaculo
 
 pygame.init()
 pantalla = pygame.display.set_mode((ANCHO, ALTO))
-pygame.display.set_caption("Simulación Completa - Editor & Tráfico")
+pygame.display.set_caption("Simulación Completa - Editor & Tráfico (Pixel Art)")
 reloj = pygame.time.Clock()
+
+# --- CARGA DE ASSETS Y FUNCIONES AUXILIARES ---
+try:
+    # 1. Cargar la imagen original
+    imagen_original = pygame.image.load("carro.png").convert_alpha()
+    imagen_delorean =  pygame.image.load("delorean.png").convert_alpha()
+    # 2. Redimensionar para que coincida con el tamaño de los círculos anteriores.
+    # El auto original tenía radio 12 (diámetro 24).
+    # La imagen es 1024x1536 (proporción 2:3).
+    # Escalamos a 24x36 píxeles.
+    NUEVO_ANCHO = 36
+    NUEVO_ALTO = 70
+    sprite_auto_base = pygame.transform.scale(imagen_original, (NUEVO_ANCHO, NUEVO_ALTO))
+    sprite_auto_base_main = pygame.transform.scale(imagen_delorean, (NUEVO_ANCHO, NUEVO_ALTO))
+except FileNotFoundError:
+    print("ERROR FATAL: No se encontró 'carro.png'. Asegúrate de que el archivo esté en el directorio.")
+    sys.exit()
+
+def teñir_imagen(imagen_base, color):
+    """
+    Crea una copia de la imagen base y la tiñe usando el modo de mezcla MULTIPLY.
+    """
+    imagen_teñida = imagen_base.copy()
+    # Crear una superficie del mismo tamaño rellena con el color deseado
+    superficie_color = pygame.Surface(imagen_teñida.get_size()).convert_alpha()
+    superficie_color.fill(color)
+    # Mezclar usando BLEND_RGBA_MULT para teñir manteniendo la textura
+    imagen_teñida.blit(superficie_color, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    return imagen_teñida
+
+def crear_npc(lista_npcs):
+    nodo_inicio = random.choice(list(mapa.nodos.keys()))
+    color_rand = random.choice(colores_posibles)
+    
+    # Crear la textura teñida para este NPC
+    sprite_npc = teñir_imagen(sprite_auto_base, color_rand)
+    velocidad = random.choice(VELOCIDADES_NPC)
+    npc = Auto(mapa.nodos[nodo_inicio], sprite_npc,velocidad)
+
+    lista_npcs.append(npc)
+
+
+# Crear el auto del jugador
+# Usamos BLANCO para que se vea el color original o un tinte neutro
+
+mi_auto = Auto(None, sprite_auto_base_main,VELOCIDAD_AUTO)
+mi_auto.historial = [] 
 
 # --- INSTANCIAS ---
 mapa = Grafo()
@@ -26,8 +73,6 @@ def conectar_realista(n1, n2):
         dist = int(math.hypot(p1[0]-p2[0], p1[1]-p2[1]))
         mapa.conectar(n1, n2, dist)
 
-mi_auto = Auto(None, BLANCO)
-mi_auto.historial = [] 
 # --- CREACIÓN INICIAL DEL MAPA ---
 mapa.agregar_nodo("N1", (200, 100))   # Arriba-Izq
 mapa.agregar_nodo("N2", (640, 100))   # Arriba-Centro
@@ -61,7 +106,16 @@ conectar_realista("N6", "N9")
 conectar_realista("N4", "N8")
 conectar_realista("N2", "N6")
 
-# --- ENTIDADES ---
+# --- ENTIDADES (Autos con Sprites) ---
+
+colores_posibles = [
+    ROJO, VERDE, AZUL, AMARILLO, NARANJA, 
+    (200, 50, 200), # Violeta
+    (50, 200, 200), # Cian
+    (150, 150, 150) # Gris oscuro
+]
+
+
 semaforos = [
     Semaforo("N5", mapa.nodos["N5"], "ROJO", 150),   
     Semaforo("N2", mapa.nodos["N2"], "VERDE", 150),  
@@ -70,15 +124,11 @@ semaforos = [
     Semaforo("N6", mapa.nodos["N6"], "ROJO", 100)    
 ]
 
-lista_npcs = [
-    Auto(mapa.nodos[random.choice(list(mapa.nodos.keys()))], ROJO),
-    Auto(mapa.nodos[random.choice(list(mapa.nodos.keys()))], ROJO),
-    Auto(mapa.nodos[random.choice(list(mapa.nodos.keys()))], ROJO),
-    Auto(mapa.nodos[random.choice(list(mapa.nodos.keys()))], ROJO),
-    Auto(mapa.nodos[random.choice(list(mapa.nodos.keys()))], ROJO)
-]
-for npc in lista_npcs:
-    npc.velocidad = VELOCIDAD_NPC
+lista_npcs = []
+# Crear 5 NPCs con colores aleatorios
+for _ in range(5):
+    crear_npc(lista_npcs)
+
 lista_obstaculos = []
 
 # Sincronización
@@ -92,7 +142,7 @@ nodo_seleccionado_para_conectar = None
 
 seleccion_origen = None
 seleccion_destino = None
-nodo_bajo_mouse = None  # Inicializar fuera del bucle para seguridad
+nodo_bajo_mouse = None 
 
 # -------------------------------
 #   HILO: lógica del auto
@@ -138,10 +188,11 @@ def hilo_npcs():
                     obst_for_npc = obst_for_npc + [mi_auto_snapshot]
 
                 npc.update(nodos_copy, sems_copy, obst_for_npc, lista_npcs)
-
+                
                 if not npc.ruta:
                     with state_lock:
                         npc.asignar_ruta_aleatoria(mapa)
+                    
             except Exception as e:
                 print("[hilo_npcs] excepción:", e)
 
@@ -161,12 +212,10 @@ thread_npcs.start()
 try:
     while True:
         # 1. ACTUALIZAR MOUSE PRIMERO
-        # (Esto hace que nodo_bajo_mouse esté disponible dentro del bucle de eventos)
         mouse_pos = pygame.mouse.get_pos()
         nodo_bajo_mouse = None
         
         with state_lock:
-            # Copia segura para iterar
             lista_items_nodos = list(mapa.nodos.items())
         
         for nombre, pos in lista_items_nodos:
@@ -198,7 +247,6 @@ try:
 
                 # --- AGREGAR/QUITAR SEMÁFORO CON 'F' (TOGGLE) ---
                 elif evento.key == pygame.K_f:
-                    # Ahora podemos usar nodo_bajo_mouse directamente porque ya está calculado
                     if nodo_bajo_mouse:
                         sem_encontrado = None
                         with state_lock:
@@ -213,7 +261,13 @@ try:
                             else:
                                 semaforos.append(Semaforo(nodo_bajo_mouse, mapa.nodos[nodo_bajo_mouse]))
                                 print(f"Semáforo CREADO en {nodo_bajo_mouse}")
-
+                
+                # --- AGREGAR/QUITAR SEMÁFORO CON 'F' (TOGGLE) ---
+                elif evento.key == pygame.K_n:
+                    crear_npc(lista_npcs)
+                # --- AGREGAR/QUITAR SEMÁFORO CON 'F' (TOGGLE) ---
+                elif evento.key == pygame.K_q:
+                    lista_npcs.pop()
             # ================= LÓGICA EDITOR =================
             if modo_editor:
                 if evento.type == pygame.MOUSEBUTTONDOWN:
@@ -289,6 +343,7 @@ try:
         imagen_fondo_base = pygame.Surface((ANCHO, ALTO))
         try:
             textura = pygame.image.load("fondo.png").convert()
+            
             ancho_t, alto_t = textura.get_size()
             for x in range(0, ANCHO, ancho_t):
                 for y in range(0, ALTO, alto_t):
@@ -311,14 +366,16 @@ try:
             sem_snapshot = list(semaforos)
             obs_snapshot = list(lista_obstaculos)
 
+        # Dibujar entidades
+        for obs in obs_snapshot:
+            obs.dibujar(pantalla)
+        for s in sem_snapshot:
+            s.dibujar(pantalla)
+            
         for npc in npc_snapshot:
             npc.dibujar(pantalla)
         if auto_pos is not None:
             mi_auto.dibujar(pantalla)
-        for s in sem_snapshot:
-            s.dibujar(pantalla)
-        for obs in obs_snapshot:
-            obs.dibujar(pantalla)
 
         # UI
         fuente = pygame.font.SysFont("Arial", 24)
@@ -328,7 +385,8 @@ try:
         
         txt_f = "F: Agregar/Quitar Semáforos"
         pantalla.blit(fuente.render(txt_f, True, BLANCO), (10, 40))
-
+        txt_q = "N: Agregar NCP, Q: Quitar un NPC al azar"
+        pantalla.blit(fuente.render(txt_q, True, BLANCO), (500, 10))
         pygame.display.flip()
         reloj.tick(60)
 
