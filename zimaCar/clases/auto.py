@@ -2,8 +2,6 @@ import pygame
 import math
 from configuracion import *
 import random
-import threading
-import time
 
 class Auto:
     def __init__(self, pos_inicial, imagen_sprite, velocidad):
@@ -13,6 +11,11 @@ class Auto:
         self.velocidad = velocidad
         self.velocidadmax = velocidad
         self.cooldown_espera = 0
+        
+        # --- DEBUG Y ESTADO ---
+        self.velocidad_actual = 0 
+        self.font_debug = pygame.font.SysFont("Consolas", 10, bold=True)
+
         # --- GESTIÓN DE SPRITE ---
         self.imagen_original = imagen_sprite
         self.image = self.imagen_original.copy()
@@ -34,48 +37,84 @@ class Auto:
         self.historial = [] 
         self.max_historial = 50
 
-    def planificar_ruta(self, ruta_nombres):
+    def planificar_ruta(self, ruta_nombres, diccionario_nodos=None):
+        """
+        Asigna la ruta y orienta el auto inmediatamente hacia el primer objetivo.
+        """
         self.ruta = ruta_nombres
         if len(self.ruta) > 0:
+            # Quitamos el nodo actual (origen)
             self.ruta.pop(0)
+
+            # Si hay un siguiente nodo y tenemos el mapa, giramos ya
+            if len(self.ruta) > 0 and diccionario_nodos is not None:
+                nombre_siguiente = self.ruta[0]
+                if nombre_siguiente in diccionario_nodos:
+                    destino_pos = diccionario_nodos[nombre_siguiente]
+                    
+                    # Calcular vector hacia el destino
+                    dx = destino_pos[0] - self.pos[0]
+                    dy = destino_pos[1] - self.pos[1]
+                    
+                    # Calcular el ángulo exacto hacia el nodo
+                    self.angulo = math.atan2(dy, dx)
 
     def update(self, diccionario_nodos, lista_semaforos, lista_obstaculos, lista_npc):
         if self.cooldown_espera > 0 and self in lista_npc:
             self.cooldown_espera -= 1
-            # Mientras espera, borramos ruta (está parado), pero ahora será SÓLIDO
             self.ruta = [] 
-            return # Salimos de la función, el auto no se mueve en este frame
+            self.velocidad_actual = 0
+            return 
 
         # -----------------------------------------------------------
-        # 1. LÓGICA DE REVERSA MEJORADA
+        # 1. LÓGICA DE REVERSA (MODIFICADA)
         # -----------------------------------------------------------
         if self.en_reversa:
+            self.velocidad_actual = -1 # Indicador visual negativo para debug
+            
             if self.historial:
                 prev_x, prev_y, prev_ang = self.historial[-1]
                 
                 camino_libre_atras = True
-                radio_seguridad = self.radio * 2 + 5 
+                
+                # Definimos qué tan lejos chequeamos hacia atrás (ej. 40 pixeles)
+                distancia_chequeo_trasero = 40 
                 
                 for obs in lista_obstaculos:
                     # Ignorarse a sí mismo
                     if hasattr(obs, 'pos') and obs.pos == self.pos:
                         continue
                     
-                    # (ELIMINADO: Ya no ignoramos autos sin ruta)
-
-                    dx = prev_x - obs.pos[0]
-                    dy = prev_y - obs.pos[1]
+                    # Calcular vector desde el Auto hacia el Obstáculo
+                    dx = obs.pos[0] - self.pos[0]
+                    dy = obs.pos[1] - self.pos[1]
                     dist = math.hypot(dx, dy)
                     
-                    if dist < radio_seguridad:
-                        camino_libre_atras = False
-                        break
+                    # Si el obstáculo está lo suficientemente cerca para preocuparnos
+                    if dist < distancia_chequeo_trasero:
+                        # Calculamos el ángulo hacia el obstáculo
+                        angulo_obs = math.atan2(dy, dx)
+                        
+                        # Calculamos la diferencia con el ángulo actual del auto
+                        diff = math.degrees(angulo_obs - self.angulo)
+                        diff = (diff + 180) % 360 - 180
+                        
+                        # LÓGICA DE "DETRÁS":
+                        # Si la diferencia es mayor a 135 o menor a -135, significa
+                        # que el objeto está en el cono trasero (detrás del auto).
+                        # (0 grados es frente, 180 o -180 es atrás)
+                        if abs(diff) > 120:  # 120 grados da un cono amplio atrás
+                            camino_libre_atras = False
+                            # Opcional: print(f"Bloqueo trasero detectado a dist {dist:.1f}")
+                            break
                 
                 if camino_libre_atras:
+                    # Si está libre atrás, procedemos a movernos al punto histórico
                     self.historial.pop()
                     self.pos = [prev_x, prev_y]
                     self.angulo = prev_ang 
                 else:
+                    # Si hay algo detrás, cancelamos reversa para intentar girar
                     self.en_reversa = False
                     self.tiempo_parado = 0 
             else:
@@ -88,6 +127,7 @@ class Auto:
         # LÓGICA NORMAL DE NAVEGACIÓN
         # -----------------------------------------------------------
         if not self.ruta:
+            self.velocidad_actual = 0
             return
 
         nombre_objetivo = self.ruta[0]
@@ -131,17 +171,15 @@ class Auto:
         else:
             ndx, ndy = 0, 0
         
-        target_angle = math.atan2(dir_y, dir_x)
-        self.angulo = target_angle
+        # Calcular ángulo deseado
+        self.angulo = math.atan2(dir_y, dir_x)
 
         # ------------------------------
-        #  EVASIÓN DE OBSTÁCULOS
+        #  EVASIÓN DE OBSTÁCULOS (FRONTAL)
         # ------------------------------
         factor_velocidad = 1.0
 
         for obs in lista_obstaculos:
-            # (ELIMINADO: Ya no ignoramos autos sin ruta)
-            
             # Ignorarse a sí mismo
             if obs is self:
                 continue
@@ -169,12 +207,13 @@ class Auto:
                         break
 
         velocidad_base = self.velocidadmax
-        velocidad_actual = velocidad_base * factor_velocidad
+        # Guardamos la velocidad real para dibujarla luego
+        self.velocidad_actual = velocidad_base * factor_velocidad
 
         # ------------------------------
         #  DETECTOR DE ATASCOS
         # ------------------------------
-        if velocidad_actual < 0.1:
+        if self.velocidad_actual < 0.1:
             self.tiempo_parado += 1
         else:
             self.tiempo_parado = 0 
@@ -206,7 +245,7 @@ class Auto:
         if not debo_frenar:
             rabbit_llegado = (target_dist >= dist_total_calle)
             
-            if rabbit_llegado and distancia_objetivo <= velocidad_actual + 2:
+            if rabbit_llegado and distancia_objetivo <= self.velocidad_actual + 2:
                 self.pos_anterior_nodo = list(pos_nodo_destino)
                 final_x = pos_nodo_destino[0] + perp_x
                 final_y = pos_nodo_destino[1] + perp_y
@@ -219,10 +258,10 @@ class Auto:
                 if not self.ruta:
                     self.cooldown_espera = COOLD_DOWN_RUTA
             else:
-                self.pos[0] += ndx * velocidad_actual
-                self.pos[1] += ndy * velocidad_actual
+                self.pos[0] += ndx * self.velocidad_actual
+                self.pos[1] += ndy * self.velocidad_actual
 
-                if velocidad_actual > 0.1 and not self.en_reversa:
+                if self.velocidad_actual > 0.1 and not self.en_reversa:
                     grabar = True
                     if self.historial:
                         ult_x, ult_y, _ = self.historial[-1]
@@ -238,15 +277,37 @@ class Auto:
     def dibujar(self, pantalla):
         if self.pos is None: return
 
+        # 1. Sprite del auto
         rotacion_pygame = -math.degrees(self.angulo) + 90
         
         self.image = pygame.transform.rotate(self.imagen_original, rotacion_pygame)
-        
-        # (ELIMINADO: Efecto fantasma/transparencia)
-        self.image.set_alpha(255) # Siempre opaco
+        self.image.set_alpha(255) 
 
         self.rect = self.image.get_rect(center=(int(self.pos[0]), int(self.pos[1])))
         pantalla.blit(self.image, self.rect)
+
+        # 2. DEBUG INFO
+        # Texto: Velocidad, Posición, Estado
+        txt_vel = f"V: {self.velocidad_actual:.1f}"
+        txt_pos = f"P: {int(self.pos[0])},{int(self.pos[1])}"
+        txt_est = "REV" if self.en_reversa else ("WAIT" if self.cooldown_espera > 0 else "RUN")
+
+        # Crear superficies de texto (Blanco con fondo negro)
+        surf_vel = self.font_debug.render(txt_vel, True, (255, 255, 255), (0, 0, 0))
+        surf_pos = self.font_debug.render(txt_pos, True, (255, 255, 255), (0, 0, 0))
+        surf_est = self.font_debug.render(txt_est, True, ROJO if self.en_reversa else (AMARILLO if txt_est == "WAIT" else (0, 255, 0)), (0,0,0))
+
+        # Posicionamiento encima del auto
+        base_y = self.rect.top - 35
+        center_x = self.pos[0]
+
+        rect_vel = surf_vel.get_rect(center=(center_x, base_y))
+        rect_pos = surf_pos.get_rect(center=(center_x, base_y + 10))
+        rect_est = surf_est.get_rect(center=(center_x, base_y + 20))
+
+        pantalla.blit(surf_vel, rect_vel)
+        pantalla.blit(surf_pos, rect_pos)
+        pantalla.blit(surf_est, rect_est)
 
     def asignar_ruta_aleatoria(self, mapa):
         if self.cooldown_espera > 0:
@@ -277,6 +338,7 @@ class Auto:
         camino = mapa.dijkstra(origen, destino)
 
         if camino and len(camino) > 1:
-            self.planificar_ruta(camino)
+            # Pasar mapa.nodos para cálculo de giro inicial
+            self.planificar_ruta(camino, mapa.nodos)
         else:
             self.ruta = []
