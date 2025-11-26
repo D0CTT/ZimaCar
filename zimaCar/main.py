@@ -20,10 +20,7 @@ try:
     # 1. Cargar la imagen original
     imagen_original = pygame.image.load("carro.png").convert_alpha()
     imagen_delorean =  pygame.image.load("delorean.png").convert_alpha()
-    # 2. Redimensionar para que coincida con el tamaño de los círculos anteriores.
-    # El auto original tenía radio 12 (diámetro 24).
-    # La imagen es 1024x1536 (proporción 2:3).
-    # Escalamos a 24x36 píxeles.
+    # 2. Redimensionar
     NUEVO_ANCHO = 36
     NUEVO_ALTO = 70
     sprite_auto_base = pygame.transform.scale(imagen_original, (NUEVO_ANCHO, NUEVO_ALTO))
@@ -37,10 +34,8 @@ def teñir_imagen(imagen_base, color):
     Crea una copia de la imagen base y la tiñe usando el modo de mezcla MULTIPLY.
     """
     imagen_teñida = imagen_base.copy()
-    # Crear una superficie del mismo tamaño rellena con el color deseado
     superficie_color = pygame.Surface(imagen_teñida.get_size()).convert_alpha()
     superficie_color.fill(color)
-    # Mezclar usando BLEND_RGBA_MULT para teñir manteniendo la textura
     imagen_teñida.blit(superficie_color, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
     return imagen_teñida
 
@@ -57,8 +52,6 @@ def crear_npc(lista_npcs):
 
 
 # Crear el auto del jugador
-# Usamos BLANCO para que se vea el color original o un tinte neutro
-
 mi_auto = Auto(None, sprite_auto_base_main,VELOCIDAD_AUTO)
 mi_auto.historial = [] 
 
@@ -191,6 +184,8 @@ def hilo_npcs():
                 
                 if not npc.ruta:
                     with state_lock:
+                        # Nota: Aquí no pasamos es_jugador=True, por lo que los NPCs
+                        # no alterarán el dibujo de tu ruta roja.
                         npc.asignar_ruta_aleatoria(mapa)
                     
             except Exception as e:
@@ -262,12 +257,14 @@ try:
                                 semaforos.append(Semaforo(nodo_bajo_mouse, mapa.nodos[nodo_bajo_mouse]))
                                 print(f"Semáforo CREADO en {nodo_bajo_mouse}")
                 
-                # --- AGREGAR/QUITAR SEMÁFORO CON 'F' (TOGGLE) ---
+                # --- AGREGAR/QUITAR NPC ---
                 elif evento.key == pygame.K_n:
                     crear_npc(lista_npcs)
-                # --- AGREGAR/QUITAR SEMÁFORO CON 'F' (TOGGLE) ---
+                
                 elif evento.key == pygame.K_q:
-                    lista_npcs.pop()
+                    if lista_npcs:
+                        lista_npcs.pop()
+
             # ================= LÓGICA EDITOR =================
             if modo_editor:
                 if evento.type == pygame.MOUSEBUTTONDOWN:
@@ -304,7 +301,8 @@ try:
                             with state_lock:
                                 if len(mi_auto.ruta) > 0:
                                     obj_actual = mi_auto.ruta[0]
-                                    camino = mapa.dijkstra(obj_actual, nodo_bajo_mouse)
+                                    # MODIFICADO: Agregado es_jugador=True
+                                    camino = mapa.dijkstra(obj_actual, nodo_bajo_mouse, es_jugador=True)
                                     if camino:
                                         mi_auto.ruta = camino
                                         seleccion_origen = nodo_bajo_mouse
@@ -312,10 +310,12 @@ try:
                                 else:
                                     if seleccion_origen is None:
                                         seleccion_origen = nodo_bajo_mouse
+                                        # Visualizar nodo seleccionado
                                         mapa.camino_resaltado = [seleccion_origen]
                                     else:
                                         seleccion_destino = nodo_bajo_mouse
-                                        camino = mapa.dijkstra(seleccion_origen, seleccion_destino)
+                                        # MODIFICADO: Agregado es_jugador=True
+                                        camino = mapa.dijkstra(seleccion_origen, seleccion_destino, es_jugador=True)
                                         if camino:
                                             mi_auto.planificar_ruta(camino)
                                             pos_origen = list(mapa.nodos[seleccion_origen])
@@ -343,7 +343,6 @@ try:
         imagen_fondo_base = pygame.Surface((ANCHO, ALTO))
         try:
             textura = pygame.image.load("fondo.png").convert()
-            
             ancho_t, alto_t = textura.get_size()
             for x in range(0, ANCHO, ancho_t):
                 for y in range(0, ALTO, alto_t):
@@ -385,7 +384,7 @@ try:
         
         txt_f = "F: Agregar/Quitar Semáforos"
         pantalla.blit(fuente.render(txt_f, True, BLANCO), (10, 40))
-        txt_q = "N: Agregar NCP, Q: Quitar un NPC al azar"
+        txt_q = "N: Agregar NPC, Q: Quitar un NPC al azar"
         pantalla.blit(fuente.render(txt_q, True, BLANCO), (500, 10))
         pygame.display.flip()
         reloj.tick(60)

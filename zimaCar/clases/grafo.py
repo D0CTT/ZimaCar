@@ -26,7 +26,8 @@ class Grafo:
                 del sus_vecinos[nombre_nodo]
         self.camino_resaltado = []
 
-    def dijkstra(self, inicio, fin):
+    # MODIFICADO: Añadido parámetro es_jugador=False
+    def dijkstra(self, inicio, fin, es_jugador=False):
         cola_prioridad = [(0, inicio)]
         distancias = {nodo: float('inf') for nodo in self.nodos}
         distancias[inicio] = 0
@@ -57,7 +58,10 @@ class Grafo:
         if len(camino) == 1 and camino[0] != inicio:
             return []
             
-        self.camino_resaltado = camino
+        # MODIFICADO: Solo guardamos la ruta para dibujar si es el jugador quien la pide
+        if es_jugador:
+            self.camino_resaltado = camino
+            
         return camino
 
     def dibujar(self, pantalla):
@@ -71,19 +75,21 @@ class Grafo:
                     # Dibujar linea divisoria (Amarilla fina)
                     pygame.draw.line(pantalla, (255, 200, 0), self.nodos[nodo_a], self.nodos[nodo_b], 2)
 
-        # 2. Dibujar camino resaltado (Ruta del GPS)
+        # 2. Dibujar camino resaltado (Ruta del GPS) en ROJO
+        # MODIFICADO: Ahora sí dibuja la línea roja conectando los nodos
         if len(self.camino_resaltado) > 1:
             for i in range(len(self.camino_resaltado) - 1):
                 na = self.camino_resaltado[i]
                 nb = self.camino_resaltado[i+1]
                 if na in self.nodos and nb in self.nodos:
-                    pass 
+                    pygame.draw.line(pantalla, ROJO, self.nodos[na], self.nodos[nb], 6)
 
         # 3. Dibujar NODOS COMO CUADRADOS
         lado = RADIO_NODO * 2 # El tamaño total es el diámetro
 
         for nombre, pos in self.nodos.items():
-            color = VERDE if nombre in self.camino_resaltado else AZUL
+            # MODIFICADO: Cambiado VERDE por ROJO para indicar ruta
+            color = ROJO if nombre in self.camino_resaltado else (255, 200, 0)
             
             # Crear el rectángulo centrado: (x - radio, y - radio, ancho, alto)
             rect_nodo = pygame.Rect(pos[0] - RADIO_NODO, pos[1] - RADIO_NODO, lado, lado)
@@ -91,8 +97,8 @@ class Grafo:
             # Dibujar el cuadrado relleno
             pygame.draw.rect(pantalla, (80, 80, 80), rect_nodo)
             
-            # Dibujar un borde blanco (opcional, por estética)
-            pygame.draw.rect(pantalla, (255, 200, 0), rect_nodo, 2)
+            # Dibujar un borde (Rojo si es ruta, Azul si no)
+            pygame.draw.rect(pantalla, color, rect_nodo, 2)
             
             # Texto centrado
             fuente = pygame.font.SysFont("Arial", 12)
