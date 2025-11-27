@@ -26,7 +26,10 @@ class Grafo:
                 del sus_vecinos[nombre_nodo]
         self.camino_resaltado = []
 
-    # MODIFICADO: Añadido parámetro es_jugador=False
+    # Este es el algoritmo que se usaba para encontrar la distancia mas 
+    # corta para llegar al nodo destino
+    # Recibe el vehiculo que lo calculo, de que nodo viene, a que nodo va y una bandera para indicar
+    # si quien llama a la funcion es un npc o el vehiculo al que se puede asignar los puntos
     def dijkstra(self, inicio, fin, es_jugador=False):
         cola_prioridad = [(0, inicio)]
         distancias = {nodo: float('inf') for nodo in self.nodos}
@@ -58,25 +61,25 @@ class Grafo:
         if len(camino) == 1 and camino[0] != inicio:
             return []
             
-        # MODIFICADO: Solo guardamos la ruta para dibujar si es el jugador quien la pide
+        # Que solo el vehiculo al que se le indica la ruta se pueda ver el camino resaltado
         if es_jugador:
             self.camino_resaltado = camino
             
         return camino
 
+    # Funcion para dibujar el mapa
     def dibujar(self, pantalla):
         # 1. Dibujar CALLES (Base ancha para dos carriles)
-        ANCHO_CALLE = ANCHO_C  # Espacio para dos autos
+        ANCHO_CALLE = ANCHO_C  
         for nodo_a, vecinos in self.aristas.items():
             for nodo_b in vecinos:
                 if nodo_a in self.nodos and nodo_b in self.nodos:
                     # Dibujar pavimento
                     pygame.draw.line(pantalla, (80, 80, 80), self.nodos[nodo_a], self.nodos[nodo_b], ANCHO_CALLE)
-                    # Dibujar linea divisoria (Amarilla fina)
+                    # Dibujar linea divisoria
                     pygame.draw.line(pantalla, (255, 200, 0), self.nodos[nodo_a], self.nodos[nodo_b], 2)
 
-        # 2. Dibujar camino resaltado (Ruta del GPS) en ROJO
-        # MODIFICADO: Ahora sí dibuja la línea roja conectando los nodos
+        # 2. Dibujar camino resaltado (Ruta del Vehiculo controlado) en ROJO
         if len(self.camino_resaltado) > 1:
             for i in range(len(self.camino_resaltado) - 1):
                 na = self.camino_resaltado[i]
@@ -84,11 +87,12 @@ class Grafo:
                 if na in self.nodos and nb in self.nodos:
                     pygame.draw.line(pantalla, ROJO, self.nodos[na], self.nodos[nb], 6)
 
-        # 3. Dibujar NODOS COMO CUADRADOS
-        lado = RADIO_NODO * 2 # El tamaño total es el diámetro
+        # 3. Dibujar nodos cuadrados
+        lado = RADIO_NODO * 2 
 
         for nombre, pos in self.nodos.items():
-            # MODIFICADO: Cambiado VERDE por ROJO para indicar ruta
+            # Cambiar color amarillo de los nodos en rojo para resaltar que este es un nodo parte
+            # de la ruta del vehiculo
             color = ROJO if nombre in self.camino_resaltado else (255, 200, 0)
             
             # Crear el rectángulo centrado: (x - radio, y - radio, ancho, alto)
@@ -97,7 +101,7 @@ class Grafo:
             # Dibujar el cuadrado relleno
             pygame.draw.rect(pantalla, (80, 80, 80), rect_nodo)
             
-            # Dibujar un borde (Rojo si es ruta, Azul si no)
+            # Dibujar un borde (Rojo si es ruta, amarillo si no)
             pygame.draw.rect(pantalla, color, rect_nodo, 2)
             
             # Texto centrado

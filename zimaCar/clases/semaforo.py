@@ -3,12 +3,17 @@ from configuracion import *
 
 class Semaforo:
     def __init__(self, nodo_id, pos, estado_inicial="ROJO", tiempo_cambio=180):
+        # El nodo al que pertenece el semaforo
         self.nodo_id = nodo_id
+        # Posicion del semaforo
         self.pos = pos
+        # En que estado se inicializa (rojo o verde)
         self.estado = estado_inicial
+        # Contador para luego ejecutar el cambio
         self.timer = 0
+        # Cada cuanto tiempo cambia de estado
         self.tiempo_cambio = tiempo_cambio
-        
+    # Actualiza el semaforo entre sus estados segun el tiempo asignado a este 
     def update(self):
         self.timer += 1
         if self.timer >= self.tiempo_cambio:
